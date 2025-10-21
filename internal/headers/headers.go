@@ -24,29 +24,38 @@ var validUnicode = map[rune]bool{
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
-	split := strings.Split(string(data), "\r\n")
-	if len(split) < 2 {
-		return 0, false, nil
-	}
-	if split[0] == "" {
-		return 0, true, nil
-	}
-	if strings.Contains(split[0], " :") {
-		return 0, false, InvaidHeaderSpacingError
+	s := string(data)
+
+	// End of headers: starts with CRLF
+	if strings.HasPrefix(s, "\r\n") {
+		return 2, true, nil
 	}
 
-	split2 := strings.SplitN(split[0], ":", 2)
-	if split2[0] == "" || invalidName(split2[0]) {
+	// Need at least one full line
+	i := strings.Index(s, "\r\n")
+	if i == -1 {
+		return 0, false, nil
+	}
+	line := s[:i]
+	if line == "" {
+		// Safety: if blank line shows up not at start, still consume
+		return 2, true, nil
+	}
+	if strings.Contains(line, " :") {
+		return 0, false, InvaidHeaderSpacingError
+	}
+	parts := strings.SplitN(line, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || invalidName(parts[0]) {
 		return 0, false, InvalidHeaderNameError
 	}
-	key := strings.TrimSpace(strings.ToLower(split2[0]))
-	value := strings.TrimSpace(strings.ToLower(split2[1]))
+	key := strings.TrimSpace(strings.ToLower(parts[0]))
+	value := strings.TrimSpace(strings.ToLower(parts[1]))
 	if h[key] != "" {
 		h[key] += ", " + value
 	} else {
 		h[key] = value
 	}
-	return len(split[0]) + 2, false, nil
+	return i + 2, false, nil
 }
 
 func NewHeaders() Headers {
