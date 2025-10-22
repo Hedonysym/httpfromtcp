@@ -62,6 +62,13 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Get(key string) (string, bool) {
+	if h[strings.ToLower(key)] == "" {
+		return "", false
+	}
+	return h[strings.ToLower(key)], true
+}
+
 func invalidName(data string) bool {
 	stripped := strings.TrimSpace(data)
 	for _, c := range stripped {

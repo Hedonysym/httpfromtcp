@@ -18,10 +18,13 @@ const IncompleteFileError = errString("file is incomplete")
 
 const NoHeadersError = errString("no headers")
 
+const BodyTooLongError = errString("body too long")
+
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
 	State       int
+	Body        []byte
 }
 
 type RequestLine struct {

@@ -3,6 +3,7 @@ package request
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/Hedonysym/httpfromtcp/internal/headers"
@@ -52,7 +53,7 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 			break
 		}
 
-		if readErr == io.EOF {
+		if readErr == io.EOF && bytesParsed == 0 {
 			return nil, IncompleteFileError
 		}
 	}
@@ -125,7 +126,21 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, nil
 		}
 		if done {
+			r.State = 3
+		}
+		return bytesParsed, nil
+	}
+	if r.State == 3 {
+		bytesParsed, done, err := r.parseBody(data)
+		if err != nil {
+			return 0, err
+		}
+		if done {
 			r.State = 0
+			return bytesParsed, nil
+		}
+		if bytesParsed == 0 {
+			return 0, nil
 		}
 		return bytesParsed, nil
 	}
@@ -134,6 +149,35 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 	}
 	return 0, fmt.Errorf("invalid state %d", r.State)
 
+}
+
+func (r *Request) parseBody(data []byte) (int, bool, error) {
+	val, ok := r.Headers.Get("content-length")
+	if !ok {
+		return 0, true, nil
+	}
+	expected, err := strconv.Atoi(val)
+	if err != nil || expected < 0 {
+		return 0, false, fmt.Errorf("invalid Content-Length")
+	}
+
+	need := expected - len(r.Body)
+	if need <= 0 {
+		// already at or over length
+		if len(r.Body) > expected {
+			return 0, false, BodyTooLongError
+		}
+		return 0, true, nil
+	}
+
+	take := min(len(data), need)
+	r.Body = append(r.Body, data[:take]...)
+
+	if len(r.Body) > expected {
+		return 0, false, BodyTooLongError
+	}
+	done := len(r.Body) == expected
+	return take, done, nil
 }
 
 func (cr *chunkReader) Read(p []byte) (n int, err error) {
