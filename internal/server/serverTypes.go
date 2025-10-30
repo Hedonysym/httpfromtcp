@@ -1,11 +1,11 @@
 package server
 
 import (
-	"io"
 	"net"
 	"sync/atomic"
 
 	"github.com/Hedonysym/httpfromtcp/internal/request"
+	"github.com/Hedonysym/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -14,7 +14,7 @@ type Server struct {
 	Open     atomic.Bool
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
 type HandlerError struct {
 	StatusCode int

@@ -27,9 +27,9 @@ func WriteStatus(w io.Writer, statusCode StatusCode) error {
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
 	h := headers.Headers{
-		"Content-Length": fmt.Sprintf("%d", contentLen),
-		"Connection":     "close",
-		"Content-Type":   "text/plain",
+		"content-length": fmt.Sprintf("%d", contentLen),
+		"connection":     "close",
+		"content-type":   "text/plain",
 	}
 	return h
 }
@@ -43,4 +43,29 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 	}
 	_, err := w.Write([]byte("\r\n"))
 	return err
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
+	if w.State != 1 {
+		return fmt.Errorf("invalid state: %d", w.State)
+	}
+	w.State = 2
+	return WriteStatus(w.Writer, statusCode)
+}
+
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	if w.State != 2 {
+		return fmt.Errorf("invalid state: %d", w.State)
+	}
+	w.State = 3
+	return WriteHeaders(w.Writer, headers)
+}
+
+func (w *Writer) WriteBody(body []byte) (int, error) {
+	if w.State != 3 {
+		return 0, fmt.Errorf("invalid state: %d", w.State)
+	}
+	w.State = 0
+	numBytes, err := w.Writer.Write(body)
+	return numBytes, err
 }

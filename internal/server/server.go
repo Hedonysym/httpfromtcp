@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"io"
 	"log"
 	"net"
@@ -53,29 +52,8 @@ func (s *Server) handle(conn net.Conn, h Handler) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	resp := bytes.Buffer{}
-	herr := h(&resp, req)
-	if herr != nil {
-		err := WriteError(conn, *herr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	head := response.GetDefaultHeaders(resp.Len())
-	err = response.WriteStatus(conn, response.StatusOk)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = response.WriteHeaders(conn, head)
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = conn.Write(resp.Bytes())
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	resp := response.NewWriter(conn)
+	h(resp, req)
 }
 
 func WriteError(w io.Writer, e HandlerError) error {

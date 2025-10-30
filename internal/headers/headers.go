@@ -63,10 +63,10 @@ func NewHeaders() Headers {
 }
 
 func (h Headers) Get(key string) (string, bool) {
-	if h[strings.ToLower(key)] == "" {
+	if h[strings.TrimSpace(strings.ToLower(key))] == "" {
 		return "", false
 	}
-	return h[strings.ToLower(key)], true
+	return h[strings.TrimSpace(strings.ToLower(key))], true
 }
 
 func invalidName(data string) bool {
@@ -77,4 +77,13 @@ func invalidName(data string) bool {
 		}
 	}
 	return false
+}
+
+func (h Headers) Set(key, value string) {
+	k := strings.TrimSpace(strings.ToLower(key))
+	h[k] = strings.TrimSpace(value)
+}
+
+func (h Headers) Override(key, value string) { // alias for clarity
+	h.Set(key, value)
 }
