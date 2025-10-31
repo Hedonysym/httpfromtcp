@@ -1,11 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/Hedonysym/httpfromtcp/internal/headers"
 	"github.com/Hedonysym/httpfromtcp/internal/request"
 	"github.com/Hedonysym/httpfromtcp/internal/response"
 	"github.com/Hedonysym/httpfromtcp/internal/server"
@@ -14,7 +19,7 @@ import (
 const port = 42069
 
 func main() {
-	server, err := server.Serve(port, HTMLHandler)
+	server, err := server.Serve(port, chunkedHandler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
@@ -83,4 +88,86 @@ func HTMLHandler(w *response.Writer, req *request.Request) {
 		log.Println(err)
 		return
 	}
+}
+
+func chunkedHandler(w *response.Writer, req *request.Request) {
+	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
+		err := w.WriteStatusLine(response.StatusBadRequest)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+	url := "https://httpbin.org" + strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
+	resp, err := http.Get(url)
+	if err != nil {
+		err = w.WriteStatusLine(response.StatusInternalServerError)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	err = w.WriteStatusLine(response.StatusOk)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	header := response.GetDefaultHeaders(0)
+	header.Override("transfer-encoding", "chunked")
+	header["trailer"] = "X-Content-SHA256, X-Content-Length"
+	delete(header, "content-length")
+	err = w.WriteHeaders(header)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	buf := make([]byte, 1024)
+	bodySize := 0
+	body := []byte{}
+	for {
+		n, err := resp.Body.Read(buf)
+		if err != nil {
+			break
+		}
+		log.Printf("%v bytes read\n", n)
+		_, err = w.Writer.Write([]byte(fmt.Sprintf("%x\r\n", n)))
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		body = append(body, copyBytes(buf[:n], n)...)
+		i, err := w.WriteChunkedBody(buf[:n])
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		bodySize += i
+		_, err = w.Writer.Write([]byte("\r\n"))
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+	_, err = w.WriteChunkedBodyDone()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	sha := sha256.Sum256(body)
+	trail := headers.NewHeaders()
+	trail["X-Content-SHA256"] = fmt.Sprintf("%x", sha)
+	trail["X-Content-Length"] = fmt.Sprintf("%d", bodySize)
+	err = w.WriteTrailers(trail)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+}
+
+func copyBytes(src []byte, n int) []byte {
+	dst := make([]byte, n)
+	copy(dst, src)
+	return dst
 }

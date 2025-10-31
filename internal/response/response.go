@@ -69,3 +69,31 @@ func (w *Writer) WriteBody(body []byte) (int, error) {
 	numBytes, err := w.Writer.Write(body)
 	return numBytes, err
 }
+
+func (w *Writer) WriteChunkedBody(body []byte) (int, error) {
+	if w.State != 3 {
+		return 0, fmt.Errorf("invalid state: %d", w.State)
+	}
+	numBytes, err := w.Writer.Write(body)
+	return numBytes, err
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.State != 3 {
+		return 0, fmt.Errorf("invalid state: %d", w.State)
+	}
+	w.State = 0
+	numBytes, err := w.Writer.Write([]byte("0\r\n"))
+	return numBytes, err
+}
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	if w.State != 0 {
+		return fmt.Errorf("invalid state: %d", w.State)
+	}
+	err := WriteHeaders(w.Writer, h)
+	if err != nil {
+		return err
+	}
+	return nil
+}
