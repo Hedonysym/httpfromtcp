@@ -19,7 +19,7 @@ import (
 const port = 42069
 
 func main() {
-	server, err := server.Serve(port, chunkedHandler)
+	server, err := server.Serve(port, videoHandler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
@@ -170,4 +170,39 @@ func copyBytes(src []byte, n int) []byte {
 	dst := make([]byte, n)
 	copy(dst, src)
 	return dst
+}
+
+func videoHandler(w *response.Writer, req *request.Request) {
+	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/video") {
+		err := w.WriteStatusLine(response.StatusBadRequest)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+	vid, err := os.ReadFile("/home/Big_Man/workspace/github.com/Hedonysym/httpfromtcp/assets/vim.mp4")
+	if err != nil {
+		err = w.WriteStatusLine(response.StatusInternalServerError)
+		if err != nil {
+			log.Println(err)
+		}
+		return
+	}
+	err = w.WriteStatusLine(response.StatusOk)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	header := response.GetDefaultHeaders(len(vid))
+	header.Override("content-type", "video/mp4")
+	err = w.WriteHeaders(header)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	bytesWritten, err := w.WriteBody(vid)
+	if err != nil || bytesWritten != len(vid) {
+		log.Println(err)
+		return
+	}
 }
